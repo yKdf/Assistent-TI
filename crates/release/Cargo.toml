@@ -1,0 +1,12 @@
+[package]
+name = "assist-release"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+assist-protocol.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
