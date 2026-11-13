@@ -1,0 +1,10 @@
+dist/
+data/
+*.log
+test-output/
+target/
+.toolchain/
+*.key
+*.pem
+config.json
+release.json

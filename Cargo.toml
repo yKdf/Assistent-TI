@@ -1,0 +1,22 @@
+[workspace]
+members = ["crates/protocol", "crates/server", "crates/agent", "crates/manager", "crates/release"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+assist-protocol = { path = "crates/protocol" }
+
+[profile.release]
+lto = "thin"
+strip = true
