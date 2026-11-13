@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
+
 use anyhow::{Context, Result};
 use std::{path::PathBuf, process::Command};
 
@@ -19,14 +21,29 @@ fn validate(server: &str) -> Result<url::Url> {
     );
     Ok(url)
 }
-fn main() -> Result<()> {
+fn run(args: &[String]) -> Result<()> {
     let exe = std::env::current_exe()?;
     let saved = exe
         .parent()
         .context("Pasta do aplicativo indisponível")?
         .join("server-url.txt");
-    let server = std::env::args()
-        .nth(1)
+    if args
+        .first()
+        .is_some_and(|arg| arg == "--check-server" || arg == "--configure")
+    {
+        anyhow::ensure!(args.len() == 2, "Informe exatamente uma URL de servidor");
+        let url = validate(args[1].trim())?;
+        if args[0] == "--configure" {
+            let temporary = saved.with_extension("tmp");
+            std::fs::write(&temporary, url.as_str())?;
+            std::fs::rename(temporary, saved)?;
+        }
+        return Ok(());
+    }
+    anyhow::ensure!(args.len() <= 1, "Informe somente a URL do servidor");
+    let server = args
+        .first()
+        .cloned()
         .or_else(|| std::fs::read_to_string(saved).ok())
         .context("Uso: assist-manager https://ti.suaempresa.com.br")?;
     let url = validate(server.trim())?;
@@ -55,6 +72,41 @@ fn main() -> Result<()> {
     }
     anyhow::bail!("Instale Microsoft Edge no Windows, ou Chromium/Edge/Chrome no Linux. O aplicativo usa o painel em uma janela própria.")
 }
+
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Err(error) = run(&args) {
+        let installer_command = args
+            .first()
+            .is_some_and(|arg| arg == "--check-server" || arg == "--configure");
+        #[cfg(windows)]
+        if !installer_command {
+            #[link(name = "user32")]
+            extern "system" {
+                fn MessageBoxW(
+                    window: *mut std::ffi::c_void,
+                    text: *const u16,
+                    caption: *const u16,
+                    flags: u32,
+                ) -> i32;
+            }
+            let text: Vec<u16> = format!("Não foi possível abrir o Assistente TI.\n\n{error}")
+                .encode_utf16()
+                .chain(Some(0))
+                .collect();
+            let title: Vec<u16> = "Assistente TI\0".encode_utf16().collect();
+            unsafe {
+                MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), 0x10);
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = installer_command;
+            eprintln!("{error}");
+        }
+        std::process::exit(1);
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,5 +123,16 @@ mod tests {
         ] {
             assert!(validate(bad).is_err());
         }
+    }
+    #[test]
+    fn installer_validation_has_no_browser_side_effect() {
+        assert!(run(&["--check-server".into(), "https://ti.example.com".into()]).is_ok());
+        assert!(run(&["--check-server".into(), "http://example.com".into()]).is_err());
+        assert!(run(&[
+            "--check-server".into(),
+            "https://ti.example.com".into(),
+            "extra".into()
+        ])
+        .is_err());
     }
 }

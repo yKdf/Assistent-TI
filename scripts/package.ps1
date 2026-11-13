@@ -27,3 +27,10 @@ $sourceFiles = @()
 foreach ($directory in @('crates','web','scripts','.github')) { $sourceFiles += @(Get-ChildItem (Join-Path $root $directory) -File -Recurse) }
 foreach ($file in @('Cargo.toml','Cargo.lock','README.md','VALIDATION.md','.gitignore')) { $sourceFiles += Get-Item (Join-Path $root $file) -Force }
 New-Package "AssistenteTI-source-$version.zip" $sourceFiles
+$artifactNames = @("AssistenteTI-windows-$version.zip", "AssistenteTI-source-$version.zip")
+$installerName = "AssistenteTI-Manager-Setup-$version-windows-x64.exe"
+if (Test-Path -LiteralPath (Join-Path $dest $installerName)) { $artifactNames += $installerName }
+$checksums = foreach ($artifact in $artifactNames) {
+    (Get-FileHash -LiteralPath (Join-Path $dest $artifact) -Algorithm SHA256).Hash.ToLower() + '  ' + $artifact
+}
+[IO.File]::WriteAllLines((Join-Path $dest 'SHA256SUMS.txt'), $checksums, (New-Object Text.UTF8Encoding($false)))

@@ -4,7 +4,14 @@ Central de gerenciamento remoto com **servidor, agente e aplicativo em Rust**. A
 
 Esta é uma primeira versão para validar em um grupo piloto. Não é uma suíte RMM completa. O suporte de tela e controle usa uma instalação separada do **RustDesk**; não há captura oculta de tela, shell remoto nem contorno da autoridade do administrador local.
 
-Os resultados dos testes e os limites de verificação desta entrega estão em [VALIDATION.md](VALIDATION.md). Os pacotes ficam em `dist/AssistenteTI-windows-0.1.0.zip` e `dist/AssistenteTI-source-0.1.0.zip`. O primeiro contém os executáveis e instaladores Windows; o segundo contém o projeto completo para compilar e instalar o servidor Linux.
+Baixe os arquivos prontos em [Releases no GitHub](https://github.com/yKdf/Assistent-TI/releases/latest):
+
+- **`AssistenteTI-Manager-Setup-0.1.1-windows-x64.exe`**: instalador gráfico do aplicativo de gerenciamento Windows. Não exige PowerShell nem administrador.
+- `AssistenteTI-windows-0.1.1.zip`: agente, gerenciador, ferramenta de assinatura e scripts de instalação Windows.
+- `AssistenteTI-source-0.1.1.zip`: projeto completo, painel e instalador do servidor Linux.
+- `SHA256SUMS.txt`: hashes dos downloads.
+
+O código está em [yKdf/Assistent-TI](https://github.com/yKdf/Assistent-TI). Resultados dos testes e limites de verificação: [VALIDATION.md](VALIDATION.md).
 
 ## Recursos implementados
 
@@ -119,9 +126,36 @@ O launcher é compilado em Rust e abre uma janela dedicada do Edge/Chromium para
 
 Windows, com Microsoft Edge instalado:
 
+1. Baixe e abra **`AssistenteTI-Manager-Setup-0.1.1-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
+2. Informe a URL HTTPS do seu servidor, por exemplo `https://ti.suaempresa.com.br`.
+3. Conclua a instalação e abra **Assistente TI** pelo menu Iniciar. O atalho na área de trabalho é opcional.
+
+A instalação é por usuário, em `%LOCALAPPDATA%\Programs\AssistenteTI`, e aparece em **Configurações → Aplicativos** para desinstalar. Reexecutar o instalador preserva a URL anterior e permite alterá-la. Não é necessário instalar Rust, Inno Setup ou executar scripts no computador que usará o Manager.
+
+O instalador desta versão ainda não tem assinatura Authenticode. O arquivo `SHA256SUMS.txt` da release permite conferir a integridade do download.
+
+O script anterior continua disponível como alternativa administrativa:
+
 ```powershell
 .\scripts\windows\install-manager.ps1 -Server https://ti.suaempresa.com.br
 ```
+
+Para gerar o `.exe` a partir do código, em um computador de build Windows com Rust:
+
+```powershell
+.\scripts\bootstrap-inno.ps1
+.\scripts\build-manager-installer.ps1
+```
+
+O primeiro comando baixa uma versão fixa do [Inno Setup](https://jrsoftware.org/inno-setup/downloads), verifica SHA-256 e assinatura, e prepara o compilador em modo portátil dentro de `.toolchain/`. O segundo compila o aplicativo Rust e gera o instalador em `dist/`. Também é possível informar `-Iscc C:\caminho\ISCC.exe` para utilizar um compilador já instalado. A CI gera o instalador e os pacotes como artifacts na execução Windows.
+
+Instalação silenciosa opcional:
+
+```powershell
+.\AssistenteTI-Manager-Setup-0.1.1-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SERVERURL="https://ti.suaempresa.com.br"
+```
+
+Esse instalador é **somente do Manager**. O agente dos computadores gerenciados e o servidor Linux continuam usando seus respectivos scripts. Publicar os binários no GitHub não ativa atualizações dos agentes: essas releases precisam ser assinadas com a chave da organização e publicadas no servidor conforme a seção 5.
 
 Linux, com Chromium, Edge ou Chrome instalado:
 

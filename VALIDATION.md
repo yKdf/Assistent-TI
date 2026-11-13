@@ -1,4 +1,19 @@
-# Validação da versão 0.1.0
+# Validação
+
+## Versão 0.1.1 — instalador do Manager
+
+Verificações locais em Windows x64, em 13/11/2026:
+
+- Nove testes Rust passaram, incluindo a validação de URL usada pelo instalador.
+- Compilação otimizada dos quatro executáveis Windows concluída.
+- Instalador gráfico `.exe` gerado com Inno Setup 7.1.1.
+- `scripts/test-manager-installer.ps1` validou rejeição de URL HTTP externa, instalação em pasta de teste, persistência da URL, registro em Aplicativos do Windows, preservação da configuração ao reinstalar, mudança de URL e desinstalação completa.
+- O teste não abriu o painel, não se conectou a um servidor externo e não instalou agente ou serviço.
+- A instalação temporária e sua entrada de desinstalação foram removidas ao concluir. Logs ficam apenas em `test-output/`, fora dos pacotes e do Git.
+
+O Manager permanece um aplicativo Rust que abre o painel no Microsoft Edge, agora com instalador gráfico e sem console ao iniciar. Os limites de validação de serviço Windows, rollback, servidor Linux e RustDesk descritos abaixo continuam aplicáveis até a homologação desses componentes.
+
+## Versão 0.1.0
 
 Executada em 13/11/2026, em ambiente Windows x64.
 
