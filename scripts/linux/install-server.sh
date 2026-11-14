@@ -97,7 +97,8 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 packages=(ca-certificates curl build-essential pkg-config libssl-dev)
 if ! $http_only; then packages+=(caddy); fi
-apt-get install -y "${packages[@]}"
+echo 'Instalando dependências; se o dpkg estiver ocupado, aguardaremos até 10 minutos.'
+apt-get -o DPkg::Lock::Timeout=600 install -y "${packages[@]}"
 if ! id assistti >/dev/null 2>&1; then useradd --system --home-dir /var/lib/assist-ti --shell /usr/sbin/nologin assistti; fi
 install -d -m 750 -o assistti -g assistti /var/lib/assist-ti /var/lib/assist-ti/releases
 install -d -m 750 -o root -g assistti /etc/assist-ti

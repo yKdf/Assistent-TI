@@ -49,6 +49,10 @@ Se a instalação antiga usava **Caddy exclusivamente para o Assistente TI**, li
 
 ## Verificar e atualizar
 
+Se aparecer `Could not get lock /var/lib/dpkg/lock-frontend` com `unattended-upgr`, o Debian está instalando atualizações automáticas. O instalador atualizado aguarda até 10 minutos pela liberação desse bloqueio na etapa de instalar dependências. Não remova os arquivos de lock nem encerre a atualização à força. Se o prazo terminar, aguarde a atualização concluir e execute novamente o instalador com as mesmas opções.
+
+Essa interrupção acontece antes de configurar e iniciar o servidor; por isso, `curl http://127.0.0.1/health` pode retornar conexão recusada. Depois de concluir a instalação, verifique o serviço com os comandos abaixo.
+
 ```bash
 sudo systemctl status assist-ti
 sudo journalctl -u assist-ti -n 100 --no-pager
