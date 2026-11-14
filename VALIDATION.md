@@ -11,6 +11,10 @@ Verificado em 14/11/2026:
 
 Os testes de configuração não instalaram pacotes nem alteraram serviços. A implantação do serviço em Linux ainda deve ser validada no servidor de destino. O modo HTTP está no código atualizado da branch `main`, não no pacote antigo da release 0.1.1. Nenhum proxy foi acrescentado à aplicação.
 
+## Versão 0.1.2 — instalador unificado Windows
+
+O instalador oferece seleção independente de Manager, Agente e Servidor. A compilação do Inno Setup, a análise de sintaxe dos scripts PowerShell e os testes Rust foram executados no Windows. A instalação real de Agente/Servidor deve ser validada em uma VM Windows dedicada porque cria serviço, tarefa agendada e regra de firewall.
+
 ## Versão 0.1.1 — instalador do Manager
 
 Verificações locais em Windows x64, em 13/11/2026:

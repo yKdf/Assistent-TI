@@ -4,7 +4,7 @@ $dest = Join-Path $root 'dist'
 $version = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'Cargo.toml')), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
 if (!$version -or $version -notmatch '^[0-9A-Za-z.-]+$') { throw 'Versão inválida no Cargo.toml.' }
 New-Item -ItemType Directory -Path "$dest\windows" -Force | Out-Null
-foreach ($name in @('assist-agent','assist-manager','assist-release')) {
+foreach ($name in @('assist-agent','assist-manager','assist-release','assist-server')) {
     Copy-Item -LiteralPath "$root\target\release\$name.exe" -Destination "$dest\windows\$name.exe" -Force
 }
 Add-Type -AssemblyName System.IO.Compression
@@ -28,7 +28,7 @@ foreach ($directory in @('crates','web','scripts','docs','.github')) { $sourceFi
 foreach ($file in @('Cargo.toml','Cargo.lock','README.md','VALIDATION.md','.gitignore')) { $sourceFiles += Get-Item (Join-Path $root $file) -Force }
 New-Package "AssistenteTI-source-$version.zip" $sourceFiles
 $artifactNames = @("AssistenteTI-windows-$version.zip", "AssistenteTI-source-$version.zip")
-$installerName = "AssistenteTI-Manager-Setup-$version-windows-x64.exe"
+$installerName = "AssistenteTI-Setup-$version-windows-x64.exe"
 if (Test-Path -LiteralPath (Join-Path $dest $installerName)) { $artifactNames += $installerName }
 $checksums = foreach ($artifact in $artifactNames) {
     (Get-FileHash -LiteralPath (Join-Path $dest $artifact) -Algorithm SHA256).Hash.ToLower() + '  ' + $artifact

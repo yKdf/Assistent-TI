@@ -6,9 +6,9 @@ Esta é uma primeira versão para validar em um grupo piloto. Não é uma suíte
 
 Baixe os arquivos prontos em [Releases no GitHub](https://github.com/yKdf/Assistent-TI/releases/latest):
 
-- **`AssistenteTI-Manager-Setup-0.1.1-windows-x64.exe`**: instalador gráfico do aplicativo de gerenciamento Windows. Não exige PowerShell nem administrador.
-- `AssistenteTI-windows-0.1.1.zip`: agente, gerenciador, ferramenta de assinatura e scripts de instalação Windows.
-- `AssistenteTI-source-0.1.1.zip`: projeto completo, painel e instalador do servidor Linux.
+- **`AssistenteTI-Setup-0.1.2-windows-x64.exe`**: instalador gráfico unificado para escolher Manager, Agente e Servidor. Agente e Servidor exigem administrador.
+- `AssistenteTI-windows-0.1.2.zip`: binários e scripts de instalação Windows.
+- `AssistenteTI-source-0.1.2.zip`: projeto completo, painel e instaladores.
 - `SHA256SUMS.txt`: hashes dos downloads.
 
 O código está em [yKdf/Assistent-TI](https://github.com/yKdf/Assistent-TI). Resultados dos testes e limites de verificação: [VALIDATION.md](VALIDATION.md).
@@ -56,7 +56,7 @@ O servidor escuta em **`0.0.0.0:80`**. Acesse **`http://IP-DO-SERVIDOR/`** no na
 
 As opções ficam em `/etc/assist-ti/server.env`. Também é possível escolher a interface com `--http --bind 10.0.0.20:80`. A URL pública HTTPS é opcional, não uma condição para iniciar o servidor HTTP.
 
-Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). Use o código atualizado da branch `main`: o pacote publicado da versão 0.1.1 antecede este modo.
+Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). A versão 0.1.2 e a branch `main` incluem esse modo.
 
 ### Instalação com HTTPS automático pelo Caddy
 
@@ -143,7 +143,7 @@ O launcher é compilado em Rust e abre uma janela dedicada do Edge/Chromium para
 
 Windows, com Microsoft Edge instalado:
 
-1. Baixe e abra **`AssistenteTI-Manager-Setup-0.1.1-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
+1. Baixe e abra **`AssistenteTI-Setup-0.1.2-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
 2. Informe a URL HTTPS do seu servidor, por exemplo `https://ti.suaempresa.com.br`.
 3. Conclua a instalação e abra **Assistente TI** pelo menu Iniciar. O atalho na área de trabalho é opcional.
 
@@ -161,15 +161,17 @@ Para gerar o `.exe` a partir do código, em um computador de build Windows com R
 
 ```powershell
 .\scripts\bootstrap-inno.ps1
-.\scripts\build-manager-installer.ps1
+.\scripts\build-windows-installer.ps1
 ```
+
+O instalador gráfico `AssistenteTI-Setup-<versão>-windows-x64.exe` permite selecionar **Manager**, **Agente** e **Servidor**, separadamente ou em qualquer combinação. O Agente solicita a URL e um convite de uso único; o Servidor solicita endereço de escuta, URL pública opcional e senha administrativa.
 
 O primeiro comando baixa uma versão fixa do [Inno Setup](https://jrsoftware.org/inno-setup/downloads), verifica SHA-256 e assinatura, e prepara o compilador em modo portátil dentro de `.toolchain/`. O segundo compila o aplicativo Rust e gera o instalador em `dist/`. Também é possível informar `-Iscc C:\caminho\ISCC.exe` para utilizar um compilador já instalado. A CI gera o instalador e os pacotes como artifacts na execução Windows.
 
 Instalação silenciosa opcional:
 
 ```powershell
-.\AssistenteTI-Manager-Setup-0.1.1-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SERVERURL="https://ti.suaempresa.com.br"
+.\AssistenteTI-Setup-0.1.2-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TYPE=custom /COMPONENTS=manager /SERVERURL="https://ti.suaempresa.com.br"
 ```
 
 Esse instalador é **somente do Manager**. O agente dos computadores gerenciados e o servidor Linux continuam usando seus respectivos scripts. Publicar os binários no GitHub não ativa atualizações dos agentes: essas releases precisam ser assinadas com a chave da organização e publicadas no servidor conforme a seção 5.
@@ -211,7 +213,7 @@ Guarde a chave privada em local restrito e com backup. No Linux o arquivo é cri
 2. Assine usando a **mesma versão embutida no executável** e uma sequência maior que todas as anteriores:
 
 ```bash
-assist-release sign assinatura.key assist-agent.exe 0.1.1 1 release-assinada
+assist-release sign assinatura.key assist-agent.exe 0.1.2 1 release-assinada
 ```
 
 3. Transfira a pasta `release-assinada` ao servidor e execute:

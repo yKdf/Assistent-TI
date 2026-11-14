@@ -3,15 +3,16 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 if (!$Installer) {
     $version = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'Cargo.toml')), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
-    $Installer = "$root\dist\AssistenteTI-Manager-Setup-$version-windows-x64.exe"
+    $Installer = "$root\dist\AssistenteTI-Setup-$version-windows-x64.exe"
 }
-$registryPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E62CCB6B-5410-4839-BAA0-35C93C2259EE}_is1'
-if (Test-Path $registryPath) { throw 'Já existe uma instalação registrada do Manager. Execute o teste em uma conta/VM separada.' }
+$registryPaths = @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E62CCB6B-5410-4839-BAA0-35C93C2259EE}_is1','HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{E62CCB6B-5410-4839-BAA0-35C93C2259EE}_is1')
+if ($registryPaths | Where-Object { Test-Path $_ }) { throw 'Já existe uma instalação registrada. Execute o teste em uma conta/VM separada.' }
+$registryPath = $registryPaths[1]
 $testDir = Join-Path $root ('test-output\installer-' + [guid]::NewGuid().ToString('N'))
 $appDir = Join-Path $testDir 'app'
 New-Item -ItemType Directory -Path $testDir -Force | Out-Null
 function Setup([string]$url, [string]$logName) {
-    $arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/NOICONS','/TASKS=""',('/DIR="' + $appDir + '"'),('/LOG="' + "$testDir\$logName.log" + '"'))
+    $arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/NOICONS','/TYPE=custom','/COMPONENTS=manager','/TASKS=""',('/DIR="' + $appDir + '"'),('/LOG="' + "$testDir\$logName.log" + '"'))
     if ($url) { $arguments += ('/SERVERURL="' + $url + '"') }
     $process = Start-Process -FilePath $Installer -ArgumentList $arguments -WindowStyle Hidden -PassThru -Wait
     return $process.ExitCode

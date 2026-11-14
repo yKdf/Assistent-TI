@@ -3,6 +3,8 @@ param(
     [string]$Server,
     [string]$UpdatePublicKey,
     [string]$RustDeskId,
+    [string]$InviteFile,
+    [switch]$InstallerMode,
     [switch]$AllowReboot,
     [string]$Binary = "$PSScriptRoot\..\..\dist\windows\assist-agent.exe"
 )
@@ -15,12 +17,19 @@ if (!$Server) { $Server = Read-Host 'URL HTTPS do servidor (ex.: https://ti.empr
 $serverUri = [uri]$Server
 if (!$serverUri.IsAbsoluteUri -or ($serverUri.Scheme -ne 'https' -and !($serverUri.Scheme -eq 'http' -and $serverUri.IsLoopback))) { throw 'Use HTTPS ou localhost.' }
 if ($serverUri.UserInfo -or $serverUri.Query -or $serverUri.Fragment -or $serverUri.AbsolutePath -ne '/') { throw 'Informe apenas a origem do servidor.' }
-if (!$UpdatePublicKey) { $UpdatePublicKey = Read-Host 'Chave pública de atualização (64 caracteres hex; vazio desabilita atualizações)' }
+if (!$UpdatePublicKey -and !$InstallerMode) { $UpdatePublicKey = Read-Host 'Chave pública de atualização (64 caracteres hex; vazio desabilita atualizações)' }
 if ($UpdatePublicKey -and $UpdatePublicKey -notmatch '^[a-fA-F0-9]{64}$') { throw 'Chave pública inválida.' }
-if (!$RustDeskId) { $RustDeskId = Read-Host 'ID RustDesk deste computador (opcional, apenas números)' }
+if (!$RustDeskId -and !$InstallerMode) { $RustDeskId = Read-Host 'ID RustDesk deste computador (opcional, apenas números)' }
 $RustDeskId = $RustDeskId -replace ' ', ''
 if ($RustDeskId -and $RustDeskId -notmatch '^\d{1,20}$') { throw 'ID RustDesk inválido.' }
-$invite = Read-Host 'Convite de uso único gerado no painel (válido por 15 minutos)'
+if ($InviteFile) {
+    if (!(Test-Path -LiteralPath $InviteFile)) { throw 'Arquivo temporário do convite não encontrado.' }
+    $invite = [IO.File]::ReadAllText($InviteFile).Trim()
+} elseif (!$InstallerMode) {
+    $invite = Read-Host 'Convite de uso único gerado no painel (válido por 15 minutos)'
+} else {
+    throw 'O instalador gráfico deve informar o convite.'
+}
 if ($invite -notmatch '^[a-fA-F0-9]{64}$') { throw 'Convite inválido.' }
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 # ACL por SID funciona em Windows em português e em inglês. Usuários comuns não podem alterar o agente.
