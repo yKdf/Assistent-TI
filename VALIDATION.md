@@ -1,5 +1,16 @@
 # Validação
 
+## Branch main — servidor HTTP na porta 80
+
+Verificado em 14/11/2026:
+
+- `cargo test --workspace --locked --offline`: 12 testes passaram. Os casos novos verificam bind de rede sem domínio/SSL, autenticação e sessão por HTTP, e preservação de cookies seguros quando uma origem HTTPS é explicitamente configurada.
+- `bash scripts/linux/test-server-config.sh`: passou para `--http` sem domínio, porta 80, URL opcional, IPv6, capability de porta privilegiada e parâmetros inválidos.
+- `bash -n scripts/linux/install-server.sh`: sem erros de sintaxe.
+- `--http --print-config`: gera `ASSIST_BIND=0.0.0.0:80`, URL pública vazia e serviço executado como `assistti` com `CAP_NET_BIND_SERVICE`.
+
+Os testes de configuração não instalaram pacotes nem alteraram serviços. A implantação do serviço em Linux ainda deve ser validada no servidor de destino. O modo HTTP está no código atualizado da branch `main`, não no pacote antigo da release 0.1.1. Nenhum proxy foi acrescentado à aplicação.
+
 ## Versão 0.1.1 — instalador do Manager
 
 Verificações locais em Windows x64, em 13/11/2026:

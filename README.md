@@ -43,6 +43,23 @@ O banco é **redb**, embutido e transacional, e não precisa de um serviço de b
 
 ## 1. Instalar o servidor Linux
 
+### HTTP na porta 80, sem SSL
+
+Para iniciar apenas o servidor web, sem SSL, domínio obrigatório ou proxy integrado:
+
+```bash
+git pull --ff-only
+sudo bash scripts/linux/install-server.sh --http
+```
+
+O servidor escuta em **`0.0.0.0:80`**. Acesse **`http://IP-DO-SERVIDOR/`** no navegador. Esse modo não instala ou configura Caddy, Nginx ou Traefik. Seu proxy externo pode encaminhar para esse endereço independentemente da aplicação.
+
+As opções ficam em `/etc/assist-ti/server.env`. Também é possível escolher a interface com `--http --bind 10.0.0.20:80`. A URL pública HTTPS é opcional, não uma condição para iniciar o servidor HTTP.
+
+Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). Use o código atualizado da branch `main`: o pacote publicado da versão 0.1.1 antecede este modo.
+
+### Instalação com HTTPS automático pelo Caddy
+
 Requisitos: Debian 12+ ou Ubuntu 24.04+, x64, systemd, acesso à internet, DNS e portas 80/443 disponíveis. Aponte um domínio para o servidor. O instalador utiliza os pacotes oficiais da distribuição e o instalador oficial do Rust.
 
 Copie este repositório (incluindo `Cargo.lock`, `crates` e `web`) para o servidor e execute:
@@ -80,7 +97,7 @@ cargo test --workspace --locked
 cargo run -p assist-server --locked
 ```
 
-Abra `http://localhost:8080`. HTTP só é aceito em loopback; nodes remotos precisam do endereço HTTPS. `ASSIST_DATA`, `ASSIST_ADMIN_PASSWORD_FILE`, `ASSIST_PUBLIC_URL` e `ASSIST_BIND` permitem configurar o servidor. `ASSIST_PUBLIC_URL=https://...` habilita o atributo Secure do cookie. O script Linux configura todas essas variáveis.
+Abra `http://localhost:8080`. Por padrão, a execução direta escuta em loopback; configure `ASSIST_BIND=0.0.0.0:80` para HTTP na porta 80 da rede. `ASSIST_PUBLIC_URL` é opcional e aceita HTTP ou HTTPS: uma origem HTTPS marca o cookie como `Secure`, sem habilitar SSL no servidor. `ASSIST_DATA` e `ASSIST_ADMIN_PASSWORD_FILE` configuram os dados e a senha. O instalador com `--http` prepara o bind e a permissão da porta 80 automaticamente.
 
 ## 2. Compilar e instalar nos computadores Windows
 

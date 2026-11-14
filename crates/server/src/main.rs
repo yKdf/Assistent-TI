@@ -590,6 +590,28 @@ fn router(app: Shared) -> Router {
         .layer(axum::middleware::from_fn(security))
         .with_state(app)
 }
+// The public origin is explicit: untrusted Forwarded headers never change cookie security.
+fn listener_config(bind: &str, public_url: &str) -> anyhow::Result<(SocketAddr, bool)> {
+    let address: SocketAddr = bind.parse()?;
+    let secure =
+        if public_url.is_empty() {
+            false
+        } else {
+            let url = url::Url::parse(public_url)?;
+            anyhow::ensure!(
+            url.host_str().is_some() && url.username().is_empty() && url.password().is_none()
+                && url.path() == "/" && url.query().is_none() && url.fragment().is_none(),
+            "ASSIST_PUBLIC_URL deve conter somente a origem pública, sem credenciais ou caminho"
+        );
+            anyhow::ensure!(
+                matches!(url.scheme(), "http" | "https"),
+                "ASSIST_PUBLIC_URL deve usar HTTP ou HTTPS"
+            );
+            url.scheme() == "https"
+        };
+    Ok((address, secure))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -609,16 +631,10 @@ async fn main() -> anyhow::Result<()> {
         .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
         .map_err(|e| anyhow::anyhow!("{e}"))?
         .to_string();
-    let address: SocketAddr = std::env::var("ASSIST_BIND")
-        .unwrap_or_else(|_| "127.0.0.1:8080".into())
-        .parse()?;
-    anyhow::ensure!(
-        address.ip().is_loopback(),
-        "O servidor deve escutar em loopback atrás de um proxy HTTPS"
-    );
-    let secure = std::env::var("ASSIST_PUBLIC_URL")
-        .unwrap_or_default()
-        .starts_with("https://");
+    let (address, secure) = listener_config(
+        &std::env::var("ASSIST_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into()),
+        &std::env::var("ASSIST_PUBLIC_URL").unwrap_or_default(),
+    )?;
     let app = Arc::new(App {
         storage: Mutex::new(Storage::open(&data.join("assist.redb"))?),
         sessions: Mutex::new(HashMap::new()),
@@ -643,6 +659,129 @@ mod tests {
     use axum::{body::Body, http::Request};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
+    #[test]
+    fn http_listener_does_not_require_ssl_or_a_public_domain() {
+        assert_eq!(
+            listener_config("0.0.0.0:80", "").unwrap(),
+            ("0.0.0.0:80".parse().unwrap(), false)
+        );
+        assert!(
+            !listener_config("0.0.0.0:80", "http://192.168.1.20")
+                .unwrap()
+                .1
+        );
+        assert!(
+            !listener_config("[::]:80", "http://ti.example.com")
+                .unwrap()
+                .1
+        );
+        assert_eq!(
+            listener_config("0.0.0.0:80", "https://ti.example.com").unwrap(),
+            ("0.0.0.0:80".parse().unwrap(), true)
+        );
+        assert!(
+            listener_config("[::]:80", "https://ti.example.com:8443/")
+                .unwrap()
+                .1
+        );
+        assert!(!listener_config("127.0.0.1:8080", "").unwrap().1);
+        assert!(
+            !listener_config("127.0.0.1:80", "http://localhost")
+                .unwrap()
+                .1
+        );
+        for origin in [
+            "ftp://ti.example.com",
+            "https://",
+            "https://user:pass@ti.example.com",
+            "https://ti.example.com/panel",
+            "https://ti.example.com?x=1",
+            "https://ti.example.com#x",
+        ] {
+            assert!(listener_config("0.0.0.0:80", origin).is_err(), "{origin}");
+        }
+    }
+    #[tokio::test]
+    async fn http_session_cookie_does_not_require_tls() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut shared = app(&dir);
+        let mutable = Arc::get_mut(&mut shared).unwrap();
+        mutable.secure = listener_config("0.0.0.0:80", "").unwrap().1;
+        mutable.password_hash = Argon2::default()
+            .hash_password(b"http-test-password", &SaltString::generate(&mut OsRng))
+            .unwrap()
+            .to_string();
+        let response = router(shared.clone())
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("http://192.168.1.20/api/login")
+                    .header("content-type", "application/json")
+                    .header("x-assist-client", "1")
+                    .body(Body::from(r#"{"password":"http-test-password"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let cookie = response
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie.contains("HttpOnly"));
+        assert!(!cookie.contains("; Secure"));
+        let authenticated = router(shared)
+            .oneshot(
+                Request::builder()
+                    .uri("http://192.168.1.20/api/nodes")
+                    .header("x-assist-client", "1")
+                    .header("cookie", cookie.split(';').next().unwrap())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(authenticated.status(), StatusCode::OK);
+    }
+    #[tokio::test]
+    async fn proxy_headers_cannot_downgrade_secure_cookie() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut shared = app(&dir);
+        let mutable = Arc::get_mut(&mut shared).unwrap();
+        mutable.secure = listener_config("0.0.0.0:80", "https://ti.example.com")
+            .unwrap()
+            .1;
+        mutable.password_hash = Argon2::default()
+            .hash_password(b"proxy-test-password", &SaltString::generate(&mut OsRng))
+            .unwrap()
+            .to_string();
+        let response = router(shared)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("http://127.0.0.1:80/api/login")
+                    .header("content-type", "application/json")
+                    .header("x-assist-client", "1")
+                    .header("host", "internal-server")
+                    .header("x-forwarded-proto", "http")
+                    .header("x-forwarded-host", "untrusted.example")
+                    .body(Body::from(r#"{"password":"proxy-test-password"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let cookie = response
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie.contains("; Secure") && cookie.contains("HttpOnly"));
+        assert!(!cookie.contains("Domain="));
+    }
     fn app(dir: &tempfile::TempDir) -> Shared {
         Arc::new(App {
             storage: Mutex::new(Storage::open(&dir.path().join("test.redb")).unwrap()),

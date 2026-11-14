@@ -24,7 +24,7 @@ function New-Package([string]$name, [IO.FileInfo[]]$files) {
 $windowsFiles = @(Get-ChildItem "$dest\windows" -File) + @(Get-ChildItem "$root\scripts\windows" -File) + @(Get-Item "$root\README.md","$root\VALIDATION.md")
 New-Package "AssistenteTI-windows-$version.zip" $windowsFiles
 $sourceFiles = @()
-foreach ($directory in @('crates','web','scripts','.github')) { $sourceFiles += @(Get-ChildItem (Join-Path $root $directory) -File -Recurse) }
+foreach ($directory in @('crates','web','scripts','docs','.github')) { $sourceFiles += @(Get-ChildItem (Join-Path $root $directory) -File -Recurse) }
 foreach ($file in @('Cargo.toml','Cargo.lock','README.md','VALIDATION.md','.gitignore')) { $sourceFiles += Get-Item (Join-Path $root $file) -Force }
 New-Package "AssistenteTI-source-$version.zip" $sourceFiles
 $artifactNames = @("AssistenteTI-windows-$version.zip", "AssistenteTI-source-$version.zip")

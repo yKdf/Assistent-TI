@@ -14,6 +14,9 @@ jobs:
       - name: Linux build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Check server installer configuration
+        if: runner.os == 'Linux'
+        run: bash scripts/linux/test-server-config.sh
       - run: cargo test --workspace --locked
       - run: cargo build --release --workspace --locked
       - name: Prepare installer compiler
