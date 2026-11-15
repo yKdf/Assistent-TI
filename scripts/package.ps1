@@ -4,7 +4,7 @@ $dest = Join-Path $root 'dist'
 $version = [regex]::Match([IO.File]::ReadAllText((Join-Path $root 'Cargo.toml')), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
 if (!$version -or $version -notmatch '^[0-9A-Za-z.-]+$') { throw 'Versão inválida no Cargo.toml.' }
 New-Item -ItemType Directory -Path "$dest\windows" -Force | Out-Null
-foreach ($name in @('assist-agent','assist-manager','assist-release','assist-server')) {
+foreach ($name in @('assist-agent','assist-manager','assist-release','assist-server','assist-support')) {
     Copy-Item -LiteralPath "$root\target\release\$name.exe" -Destination "$dest\windows\$name.exe" -Force
 }
 Add-Type -AssemblyName System.IO.Compression

@@ -53,6 +53,7 @@ Name: "desktopicon"; Description: "Criar atalho do Manager na área de trabalho"
 Source: "{#ProjectRoot}\target\release\assist-manager.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: manager
 Source: "{#ProjectRoot}\target\release\assist-manager.exe"; Flags: dontcopy
 Source: "{#ProjectRoot}\target\release\assist-agent.exe"; Flags: dontcopy
+Source: "{#ProjectRoot}\target\release\assist-support.exe"; Flags: dontcopy
 Source: "{#ProjectRoot}\target\release\assist-server.exe"; Flags: dontcopy
 Source: "{#ProjectRoot}\scripts\windows\install-agent.ps1"; Flags: dontcopy
 Source: "{#ProjectRoot}\scripts\windows\update-agent.ps1"; Flags: dontcopy
@@ -97,6 +98,7 @@ procedure ExtractSupportFiles;
 begin
   ExtractTemporaryFile('assist-manager.exe');
   ExtractTemporaryFile('assist-agent.exe');
+  ExtractTemporaryFile('assist-support.exe');
   ExtractTemporaryFile('assist-server.exe');
   ExtractTemporaryFile('install-agent.ps1');
   ExtractTemporaryFile('update-agent.ps1');
@@ -136,10 +138,8 @@ begin
   AgentPage := CreateInputQueryPage(ConnectionPage.ID, 'Configurar Agente', 'Cadastre este computador como node', 'Gere um convite de uso único no painel. Os demais campos são opcionais.');
   AgentPage.Add('Convite de uso único:', False);
   AgentPage.Add('Chave pública de atualização (hex):', False);
-  AgentPage.Add('ID RustDesk:', False);
   AgentPage.Values[0] := ExpandConstant('{param:INVITE|}');
   AgentPage.Values[1] := ExpandConstant('{param:UPDATEKEY|}');
-  AgentPage.Values[2] := ExpandConstant('{param:RUSTDESKID|}');
 
   ServerPage := CreateInputQueryPage(AgentPage.ID, 'Configurar Servidor', 'Central Assistente TI no Windows', 'O servidor será iniciado automaticamente. Use a URL pública HTTPS se houver proxy externo.');
   ServerPage.Add('Escutar em:', False);
@@ -159,7 +159,7 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
   if (CurPageID = ConnectionPage.ID) and not CheckConnectionUrl then begin MsgBox('Informe uma URL HTTPS válida. HTTP é aceito somente em localhost.', mbError, MB_OK); Result := False; end
-  else if (CurPageID = AgentPage.ID) and ((Length(Trim(AgentPage.Values[0])) <> 64) or not SafeValue(AgentPage.Values[0]) or not SafeValue(AgentPage.Values[1]) or not SafeValue(AgentPage.Values[2])) then begin MsgBox('Informe um convite válido e confira os demais campos.', mbError, MB_OK); Result := False; end
+  else if (CurPageID = AgentPage.ID) and ((Length(Trim(AgentPage.Values[0])) <> 64) or not SafeValue(AgentPage.Values[0]) or not SafeValue(AgentPage.Values[1])) then begin MsgBox('Informe um convite válido e confira os demais campos.', mbError, MB_OK); Result := False; end
   else if (CurPageID = ServerPage.ID) and ((Length(ServerPage.Values[2]) < 12) or not SafeValue(ServerPage.Values[0]) or not SafeValue(ServerPage.Values[1])) then begin MsgBox('Confira o endereço e informe uma senha de pelo menos 12 caracteres.', mbError, MB_OK); Result := False; end;
 end;
 
@@ -190,9 +190,8 @@ begin
   if Selected('agent') then begin
     SecretFile := ExpandConstant('{tmp}\agent-invite.txt');
     SaveStringToFile(SecretFile, Trim(AgentPage.Values[0]), False);
-    Parameters := '-InstallerMode -Server "' + Trim(ConnectionPage.Values[0]) + '" -InviteFile "' + SecretFile + '" -Binary "' + ExpandConstant('{tmp}\assist-agent.exe') + '"';
+    Parameters := '-InstallerMode -Server "' + Trim(ConnectionPage.Values[0]) + '" -InviteFile "' + SecretFile + '" -Binary "' + ExpandConstant('{tmp}\assist-agent.exe') + '" -SupportBinary "' + ExpandConstant('{tmp}\assist-support.exe') + '"';
     if Trim(AgentPage.Values[1]) <> '' then Parameters := Parameters + ' -UpdatePublicKey "' + Trim(AgentPage.Values[1]) + '"';
-    if Trim(AgentPage.Values[2]) <> '' then Parameters := Parameters + ' -RustDeskId "' + Trim(AgentPage.Values[2]) + '"';
     RunPowerShell('install-agent.ps1', Parameters);
     DeleteFile(SecretFile);
   end;

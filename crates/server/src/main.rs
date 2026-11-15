@@ -1,6 +1,7 @@
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use assist_protocol::*;
 use axum::{
+    body::Bytes,
     extract::{DefaultBodyLimit, Path, State},
     http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
@@ -24,6 +25,8 @@ struct Node {
     id: String,
     name: String,
     token_hash: String,
+    #[serde(default)]
+    support_token_hash: String,
     enabled: bool,
     last_seen: u64,
     metrics: Metrics,
@@ -106,6 +109,16 @@ struct App {
     password_hash: String,
     secure: bool,
     release_dir: PathBuf,
+    support: Mutex<HashMap<String, RemoteSession>>,
+}
+
+struct RemoteSession {
+    node_id: String,
+    state: String,
+    created: u64,
+    expires: u64,
+    frame: Vec<u8>,
+    inputs: Vec<Value>,
 }
 type Shared = Arc<App>;
 #[derive(Debug)]
@@ -163,11 +176,7 @@ fn admin(app: &App, headers: &HeaderMap) -> Api<()> {
     }
 }
 fn node_id(storage: &Storage, headers: &HeaderMap) -> Api<String> {
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .ok_or_else(denied)?;
+    let token = bearer(headers).ok_or_else(denied)?;
     let hashed = hash(token);
     storage
         .records
@@ -176,6 +185,13 @@ fn node_id(storage: &Storage, headers: &HeaderMap) -> Api<String> {
         .find(|n| n.enabled && n.token_hash == hashed)
         .map(|n| n.id.clone())
         .ok_or_else(denied)
+}
+fn bearer(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Bearer ")
 }
 fn public_node(n: &Node) -> Value {
     json!({"id":n.id,"name":n.name,"enabled":n.enabled,"last_seen":n.last_seen,"online":n.enabled && now().saturating_sub(n.last_seen)<90,"metrics":n.metrics,"history":n.history})
@@ -302,11 +318,13 @@ async fn enroll(
         .ok_or_else(denied)?;
     let id = random();
     let token = random();
+    let support_token = random();
     store.records.invites.remove(index);
     store.records.nodes.push(Node {
         id: id.clone(),
         name: input.hostname,
         token_hash: hash(&token),
+        support_token_hash: hash(&support_token),
         enabled: true,
         last_seen: 0,
         metrics: Metrics::default(),
@@ -314,7 +332,11 @@ async fn enroll(
     });
     store.audit("node_enrolled", &id);
     store.save().map_err(internal)?;
-    Ok(Json(Credentials { node_id: id, token }))
+    Ok(Json(Credentials {
+        node_id: id,
+        token,
+        support_token,
+    }))
 }
 fn current_release(app: &App) -> Option<Release> {
     let bytes = std::fs::read(app.release_dir.join("release.json")).ok()?;
@@ -473,6 +495,17 @@ async fn revoke(
     }
     store.audit("node_revoked", &id);
     store.save().map_err(internal)?;
+    drop(store);
+    for session in app
+        .support
+        .lock()
+        .unwrap()
+        .values_mut()
+        .filter(|s| s.node_id == id)
+    {
+        session.state = "ended".into();
+        session.inputs.push(json!({"type":"end"}));
+    }
     Ok(Json(json!({"ok":true})))
 }
 async fn support(
@@ -481,22 +514,209 @@ async fn support(
     Path(id): Path<String>,
 ) -> Api<Json<Value>> {
     admin(&app, &headers)?;
-    let mut store = app.storage.lock().unwrap();
-    let node = store
+    {
+        let mut store = app.storage.lock().unwrap();
+        let node = store
+            .records
+            .nodes
+            .iter()
+            .find(|n| n.id == id && n.enabled && !n.support_token_hash.is_empty())
+            .ok_or(ApiError(
+                StatusCode::NOT_FOUND,
+                "Suporte próprio não configurado",
+            ))?;
+        if now().saturating_sub(node.last_seen) >= 90 {
+            return Err(ApiError(StatusCode::CONFLICT, "Computador offline"));
+        }
+        store.audit("support_session_created", &id);
+        store.save().map_err(internal)?;
+    }
+    let session_id = random();
+    let expires = now() + 3600;
+    let mut sessions = app.support.lock().unwrap();
+    sessions.retain(|_, s| s.expires > now() && s.state != "ended");
+    if sessions.values().any(|s| s.node_id == id) {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Já existe uma sessão para este computador",
+        ));
+    }
+    sessions.insert(
+        session_id.clone(),
+        RemoteSession {
+            node_id: id,
+            state: "waiting".into(),
+            created: now(),
+            expires,
+            frame: vec![],
+            inputs: vec![],
+        },
+    );
+    Ok(Json(json!({"session_id":session_id,"expires":expires})))
+}
+
+fn support_node(app: &App, headers: &HeaderMap) -> Api<String> {
+    let node = headers
+        .get("x-assist-node")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(denied)?;
+    let token = bearer(headers).ok_or_else(denied)?;
+    let store = app.storage.lock().unwrap();
+    store
         .records
         .nodes
         .iter()
-        .find(|n| n.id == id && n.enabled)
-        .ok_or(ApiError(StatusCode::NOT_FOUND, "Computador não encontrado"))?;
-    let support_id = node.metrics.support_id.clone().ok_or(ApiError(
-        StatusCode::CONFLICT,
-        "Configure o ID RustDesk no agente",
-    ))?;
-    store.audit("support_link_opened", &id);
-    store.save().map_err(internal)?;
+        .find(|n| {
+            n.id == node
+                && n.enabled
+                && !n.support_token_hash.is_empty()
+                && n.support_token_hash == hash(token)
+        })
+        .map(|n| n.id.clone())
+        .ok_or_else(denied)
+}
+
+async fn support_pending(State(app): State<Shared>, headers: HeaderMap) -> Api<Json<Value>> {
+    let node = support_node(&app, &headers)?;
+    let sessions = app.support.lock().unwrap();
+    let id = sessions
+        .iter()
+        .find(|(_, s)| s.node_id == node && s.state == "waiting" && s.expires > now())
+        .map(|(id, _)| id.clone());
+    Ok(Json(json!({"session_id":id})))
+}
+
+async fn support_active(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Api<Json<Value>> {
+    let node = support_node(&app, &headers)?;
+    let mut sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get_mut(&id)
+        .filter(|s| s.node_id == node && s.expires > now())
+        .ok_or(ApiError(StatusCode::NOT_FOUND, "Sessão não encontrada"))?;
+    session.state = "active".into();
+    Ok(Json(json!({"ok":true})))
+}
+
+async fn support_frame_upload(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    body: Bytes,
+) -> Api<Json<Value>> {
+    let node = support_node(&app, &headers)?;
+    if body.len() > 4 * 1024 * 1024 || !body.starts_with(&[0xff, 0xd8, 0xff]) {
+        return Err(bad());
+    }
+    let mut sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get_mut(&id)
+        .filter(|s| s.node_id == node && s.state == "active" && s.expires > now())
+        .ok_or(ApiError(StatusCode::NOT_FOUND, "Sessão não encontrada"))?;
+    session.frame = body.to_vec();
+    Ok(Json(json!({"ok":true})))
+}
+
+async fn support_inputs(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Api<Json<Vec<Value>>> {
+    let node = support_node(&app, &headers)?;
+    let mut sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get_mut(&id)
+        .filter(|s| s.node_id == node && s.expires > now())
+        .ok_or(ApiError(StatusCode::NOT_FOUND, "Sessão não encontrada"))?;
+    Ok(Json(std::mem::take(&mut session.inputs)))
+}
+
+async fn support_status(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Api<Json<Value>> {
+    admin(&app, &headers)?;
+    let sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get(&id)
+        .filter(|s| s.expires > now())
+        .ok_or(ApiError(StatusCode::NOT_FOUND, "Sessão não encontrada"))?;
     Ok(Json(
-        json!({"url":format!("rustdesk://connection/new/{support_id}")}),
+        json!({"state":session.state,"created":session.created,"expires":session.expires,"has_frame":!session.frame.is_empty()}),
     ))
+}
+
+async fn support_frame(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Api<Response> {
+    admin(&app, &headers)?;
+    let sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get(&id)
+        .filter(|s| !s.frame.is_empty() && s.expires > now())
+        .ok_or(ApiError(
+            StatusCode::NOT_FOUND,
+            "Imagem ainda não disponível",
+        ))?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/jpeg"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        session.frame.clone(),
+    )
+        .into_response())
+}
+
+async fn support_input(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(input): Json<Value>,
+) -> Api<Json<Value>> {
+    admin(&app, &headers)?;
+    if input.to_string().len() > 2000 || input.get("type").and_then(Value::as_str).is_none() {
+        return Err(bad());
+    }
+    let mut sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get_mut(&id)
+        .filter(|s| s.state == "active" && s.expires > now())
+        .ok_or(ApiError(StatusCode::CONFLICT, "Sessão não está ativa"))?;
+    if session.inputs.len() >= 200 {
+        return Err(ApiError(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Muitos eventos pendentes",
+        ));
+    }
+    session.inputs.push(input);
+    Ok(Json(json!({"ok":true})))
+}
+
+async fn support_end(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Api<Json<Value>> {
+    admin(&app, &headers)?;
+    let mut sessions = app.support.lock().unwrap();
+    let session = sessions
+        .get_mut(&id)
+        .ok_or(ApiError(StatusCode::NOT_FOUND, "Sessão não encontrada"))?;
+    session.state = "ended".into();
+    session.inputs.push(json!({"type":"end"}));
+    let node = session.node_id.clone();
+    drop(sessions);
+    let mut store = app.storage.lock().unwrap();
+    store.audit("support_session_ended", &node);
+    store.save().map_err(internal)?;
+    Ok(Json(json!({"ok":true})))
 }
 async fn activity(State(app): State<Shared>, headers: HeaderMap) -> Api<Json<Value>> {
     admin(&app, &headers)?;
@@ -541,7 +761,7 @@ async fn security(request: axum::extract::Request, next: axum::middleware::Next)
     h.insert("x-frame-options", "DENY".parse().unwrap());
     h.insert("referrer-policy", "no-referrer".parse().unwrap());
     h.insert("cache-control", "no-store".parse().unwrap());
-    h.insert("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'".parse().unwrap());
+    h.insert("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'".parse().unwrap());
     response
 }
 fn router(app: Shared) -> Router {
@@ -584,9 +804,17 @@ fn router(app: Shared) -> Router {
         .route("/api/nodes/{id}/commands", post(command))
         .route("/api/nodes/{id}/revoke", post(revoke))
         .route("/api/nodes/{id}/support", post(support))
+        .route("/api/support/client/pending", get(support_pending))
+        .route("/api/support/client/{id}/active", post(support_active))
+        .route("/api/support/client/{id}/frame", post(support_frame_upload))
+        .route("/api/support/client/{id}/inputs", get(support_inputs))
+        .route("/api/support/{id}", get(support_status))
+        .route("/api/support/{id}/frame", get(support_frame))
+        .route("/api/support/{id}/input", post(support_input))
+        .route("/api/support/{id}/end", post(support_end))
         .route("/api/activity", get(activity))
         .route("/api/releases/{digest}", get(download))
-        .layer(DefaultBodyLimit::max(256 * 1024))
+        .layer(DefaultBodyLimit::max(4 * 1024 * 1024))
         .layer(axum::middleware::from_fn(security))
         .with_state(app)
 }
@@ -642,6 +870,7 @@ async fn main() -> anyhow::Result<()> {
         password_hash,
         secure,
         release_dir: data.join("releases"),
+        support: Mutex::new(HashMap::new()),
     });
     let listener = tokio::net::TcpListener::bind(address).await?;
     tracing::info!("Assistente TI escutando em {address}");
@@ -790,6 +1019,7 @@ mod tests {
             password_hash: String::new(),
             secure: false,
             release_dir: dir.path().into(),
+            support: Mutex::new(HashMap::new()),
         })
     }
     async fn request(
@@ -905,6 +1135,7 @@ mod tests {
                     id: id.into(),
                     name: id.into(),
                     token_hash: hash(id),
+                    support_token_hash: hash(format!("support-{id}")),
                     enabled: true,
                     last_seen: now(),
                     metrics: Metrics::default(),
@@ -1045,6 +1276,7 @@ mod tests {
                 id: "node".into(),
                 name: "node".into(),
                 token_hash: hash("token"),
+                support_token_hash: hash("support-token"),
                 enabled: true,
                 last_seen: now(),
                 metrics: Metrics::default(),

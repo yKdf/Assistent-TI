@@ -43,3 +43,4 @@ jobs:
             target/release/assist-manager.exe
             target/release/assist-release.exe
             target/release/assist-server.exe
+            target/release/assist-support.exe

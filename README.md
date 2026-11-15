@@ -2,13 +2,13 @@
 
 Central de gerenciamento remoto com **servidor, agente e aplicativo em Rust**. Agente para Windows 10/11 x64; servidor para Linux; aplicativo de gerenciamento para Windows e Linux. O painel web é servido pelo próprio servidor e usa os mesmos recursos do aplicativo.
 
-Esta é uma primeira versão para validar em um grupo piloto. Não é uma suíte RMM completa. O suporte de tela e controle usa uma instalação separada do **RustDesk**; não há captura oculta de tela, shell remoto nem contorno da autoridade do administrador local.
+Esta é uma primeira versão para validar em um grupo piloto. O suporte próprio transmite a tela principal e recebe mouse e teclado por sessões temporárias autenticadas. Não há shell remoto, gravação de tela nem contorno da autoridade do administrador local.
 
 Baixe os arquivos prontos em [Releases no GitHub](https://github.com/yKdf/Assistent-TI/releases/latest):
 
-- **`AssistenteTI-Setup-0.1.2-windows-x64.exe`**: instalador gráfico unificado para escolher Manager, Agente e Servidor. Agente e Servidor exigem administrador.
-- `AssistenteTI-windows-0.1.2.zip`: binários e scripts de instalação Windows.
-- `AssistenteTI-source-0.1.2.zip`: projeto completo, painel e instaladores.
+- **`AssistenteTI-Setup-0.2.0-windows-x64.exe`**: instalador gráfico unificado com Manager, Agente, Servidor e suporte remoto próprio.
+- `AssistenteTI-windows-0.2.0.zip`: binários e scripts de instalação Windows.
+- `AssistenteTI-source-0.2.0.zip`: projeto completo, painel e instaladores.
 - `SHA256SUMS.txt`: hashes dos downloads.
 
 O código está em [yKdf/Assistent-TI](https://github.com/yKdf/Assistent-TI). Resultados dos testes e limites de verificação: [VALIDATION.md](VALIDATION.md).
@@ -24,7 +24,7 @@ O código está em [yKdf/Assistent-TI](https://github.com/yKdf/Assistent-TI). Re
 - Serviço Windows automático, recuperação após falha, pasta e controle do serviço restritos a SYSTEM/Administradores.
 - Atualização automática do agente: SHA-256, assinatura Ed25519, sequência crescente, instalação por tarefa administrativa e rollback se não houver heartbeat da nova versão em 90 segundos.
 - Histórico de até 5.000 eventos de auditoria e 5.000 comandos; interface mostra os 200 últimos.
-- Abertura de sessão RustDesk pelo ID configurado no agente.
+- Suporte remoto próprio pelo navegador, com acesso não assistido habilitado na instalação do Agente.
 
 ## Estrutura
 
@@ -56,7 +56,7 @@ O servidor escuta em **`0.0.0.0:80`**. Acesse **`http://IP-DO-SERVIDOR/`** no na
 
 As opções ficam em `/etc/assist-ti/server.env`. Também é possível escolher a interface com `--http --bind 10.0.0.20:80`. A URL pública HTTPS é opcional, não uma condição para iniciar o servidor HTTP.
 
-Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). A versão 0.1.2 e a branch `main` incluem esse modo.
+Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). A versão 0.2.0 e a branch `main` incluem esse modo.
 
 ### Instalação com HTTPS automático pelo Caddy
 
@@ -117,7 +117,7 @@ No painel, clique em **Adicionar computador** para gerar um convite. No computad
 .\scripts\windows\install-agent.ps1 -Server https://ti.suaempresa.com.br
 ```
 
-O instalador solicita o convite, a chave pública de atualização e o ID RustDesk opcional. Para permitir reinicialização remota, acrescente `-AllowReboot`. Sem esse parâmetro a ação será rejeitada pelo próprio agente.
+O instalador solicita o convite e a chave pública de atualização opcional. Para permitir reinicialização remota, acrescente `-AllowReboot`. Sem esse parâmetro a ação será rejeitada pelo próprio agente.
 
 ```powershell
 .\scripts\windows\install-agent.ps1 -Server https://ti.suaempresa.com.br -AllowReboot -Binary C:\Instalador\assist-agent.exe
@@ -143,7 +143,7 @@ O launcher é compilado em Rust e abre uma janela dedicada do Edge/Chromium para
 
 Windows, com Microsoft Edge instalado:
 
-1. Baixe e abra **`AssistenteTI-Setup-0.1.2-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
+1. Baixe e abra **`AssistenteTI-Setup-0.2.0-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
 2. Informe a URL HTTPS do seu servidor, por exemplo `https://ti.suaempresa.com.br`.
 3. Conclua a instalação e abra **Assistente TI** pelo menu Iniciar. O atalho na área de trabalho é opcional.
 
@@ -171,7 +171,7 @@ O primeiro comando baixa uma versão fixa do [Inno Setup](https://jrsoftware.org
 Instalação silenciosa opcional:
 
 ```powershell
-.\AssistenteTI-Setup-0.1.2-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TYPE=custom /COMPONENTS=manager /SERVERURL="https://ti.suaempresa.com.br"
+.\AssistenteTI-Setup-0.2.0-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TYPE=custom /COMPONENTS=manager /SERVERURL="https://ti.suaempresa.com.br"
 ```
 
 Esse instalador é **somente do Manager**. O agente dos computadores gerenciados e o servidor Linux continuam usando seus respectivos scripts. Publicar os binários no GitHub não ativa atualizações dos agentes: essas releases precisam ser assinadas com a chave da organização e publicadas no servidor conforme a seção 5.
@@ -187,13 +187,9 @@ O servidor também produz o binário Linux em `/opt/assist-ti/assist-manager`; c
 
 ## 4. Ver a tela e dar suporte
 
-Instale o RustDesk no computador do técnico e no node, configure as permissões de sessão e informe o ID do node no instalador do agente. Se necessário, um administrador pode editar `support_id` em `config.json` e reiniciar o serviço.
+O instalador unificado inclui `assist-support.exe`. Ele recebe uma credencial limitada, inicia na sessão do usuário pelo Windows e aguarda solicitações da central. Clique em **Iniciar suporte próprio** nos detalhes do computador para transmitir a tela principal e controlar mouse e teclado.
 
-Clique em **Abrir suporte RustDesk** nos detalhes do computador. O sistema abre `rustdesk://connection/new/ID`. A conexão depende do handler de protocolo instalado e das políticas/credenciais/consentimento configurados no RustDesk. O painel não armazena senhas do RustDesk.
-
-Para manter também o tráfego de suporte em infraestrutura própria, configure separadamente o servidor de rendezvous/relay do RustDesk e aponte os dois clientes para ele: [documentação oficial de configuração](https://rustdesk.com/docs/en/self-host/client-configuration/). O instalador deste projeto instala o servidor da central, **não** os serviços RustDesk.
-
-Nesta versão, ver “o que está fazendo” significa consultar processos e abrir uma sessão autorizada de tela pelo RustDesk. Não há gravação de tela, registro de teclas ou histórico de navegação.
+O acesso não assistido é habilitado durante a instalação administrativa. Cada sessão expira em uma hora, pode ser encerrada no painel e mostra uma janela intitulada **SUPORTE REMOTO ATIVO** no node. O servidor conserva apenas o quadro mais recente em memória e não grava a tela, as teclas ou o histórico de navegação.
 
 ## 5. Atualizações automáticas do agente
 
@@ -213,7 +209,7 @@ Guarde a chave privada em local restrito e com backup. No Linux o arquivo é cri
 2. Assine usando a **mesma versão embutida no executável** e uma sequência maior que todas as anteriores:
 
 ```bash
-assist-release sign assinatura.key assist-agent.exe 0.1.2 1 release-assinada
+assist-release sign assinatura.key assist-agent.exe 0.2.0 1 release-assinada
 ```
 
 3. Transfira a pasta `release-assinada` ao servidor e execute:
@@ -231,7 +227,7 @@ Os scripts de instalação/atualização não são substituídos remotamente por
 - Uma conta administrativa compartilhada nesta versão. Ainda faltam contas individuais, MFA, RBAC, grupos e múltiplas organizações.
 - Fila limitada a ações explícitas: não há terminal remoto, gerenciamento completo de serviços, pacotes, arquivos ou registro do Windows na central.
 - Métricas são aproximadas; CPU precisa de duas amostras e CPU por processo pode somar vários núcleos. Os 120 pontos são apenas um histórico recente, não monitoramento de longo prazo.
-- Auditoria local registra acesso, convites, revogações, ações e abertura do link RustDesk. Não é um log imutável nem uma gravação das sessões.
+- Auditoria local registra acesso, convites, revogações, ações e início/fim das sessões de suporte. Não é um log imutável nem uma gravação das sessões.
 - A senha administrativa é lida de arquivo restrito; durante execução é mantido apenas o hash de verificação. Alterá-la exige editar o arquivo e reiniciar o serviço, invalidando todas as sessões.
 - Backups: pare `assist-ti`, copie `/var/lib/assist-ti/assist.redb` e os arquivos de configuração protegidos, então inicie o serviço. Guarde releases e chave de assinatura separadamente.
 - O painel não precisa de Node/npm. HTML/CSS/JS são embutidos no binário do servidor.

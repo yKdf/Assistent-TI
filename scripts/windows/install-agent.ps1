@@ -6,10 +6,12 @@ param(
     [string]$InviteFile,
     [switch]$InstallerMode,
     [switch]$AllowReboot,
+    [string]$SupportBinary,
     [string]$Binary = "$PSScriptRoot\..\..\dist\windows\assist-agent.exe"
 )
 $ErrorActionPreference = 'Stop'
 $installDir = Join-Path $env:ProgramData 'AssistenteTI'
+$supportDir = Join-Path $env:ProgramData 'AssistenteTISupport'
 if (Get-Service AssistenteTINode -ErrorAction SilentlyContinue) { throw 'O agente já está instalado. Use atualização assinada ou desinstale antes de recadastrar.' }
 if (Test-Path -LiteralPath $installDir) { throw 'A pasta AssistenteTI já existe. Revise e remova a instalação anterior antes de prosseguir; o instalador não reutiliza pastas preexistentes.' }
 if (!(Test-Path -LiteralPath $Binary)) { throw "Binário não encontrado: $Binary. Execute scripts/build-windows.ps1 primeiro." }
@@ -53,12 +55,24 @@ $enrollProcess.StartInfo.UseShellExecute = $false
 $enrollProcess.StartInfo.CreateNoWindow = $true
 $enrollProcess.StartInfo.RedirectStandardInput = $true
 $enrollProcess.StartInfo.EnvironmentVariables['ASSIST_AGENT_DIR'] = $installDir
+if ($SupportBinary) {
+    New-Item -ItemType Directory -Path $supportDir -Force | Out-Null
+    $enrollProcess.StartInfo.EnvironmentVariables['ASSIST_SUPPORT_CONFIG'] = Join-Path $supportDir 'config.json'
+}
 $enrollProcess.Start() | Out-Null
 $enrollProcess.StandardInput.WriteLine($invite)
 $enrollProcess.StandardInput.Close()
 $invite = $null
 $enrollProcess.WaitForExit()
 if ($enrollProcess.ExitCode -ne 0) { throw 'Cadastro falhou. Corrija a conexão, remova a configuração sem credenciais e tente com novo convite.' }
+if ($SupportBinary) {
+    if (!(Test-Path -LiteralPath $SupportBinary)) { throw 'Módulo de suporte não encontrado.' }
+    Copy-Item -LiteralPath $SupportBinary -Destination (Join-Path $supportDir 'assist-support.exe') -Force
+    & icacls.exe $supportDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-11:(OI)(CI)RX' /t | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível proteger o módulo de suporte.' }
+    New-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name AssistenteTISupport -PropertyType String -Value ('"' + (Join-Path $supportDir 'assist-support.exe') + '"') -Force | Out-Null
+    Start-Process -FilePath (Join-Path $supportDir 'assist-support.exe') -WindowStyle Hidden
+}
 New-Service -Name AssistenteTINode -BinaryPathName ('"' + (Join-Path $installDir 'assist-agent.exe') + '" service') -DisplayName 'Assistente TI — Node' -Description 'Inventário e suporte autorizado da organização.' -StartupType Automatic | Out-Null
 & sc.exe failure AssistenteTINode reset= 86400 actions= restart/10000/restart/30000/restart/60000 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Não foi possível configurar recuperação de falhas.' }

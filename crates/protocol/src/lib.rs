@@ -74,6 +74,7 @@ pub struct Enrollment {
 pub struct Credentials {
     pub node_id: String,
     pub token: String,
+    pub support_token: String,
 }
 
 // Signature covers every field affecting installation, in an unambiguous format.

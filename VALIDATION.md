@@ -11,6 +11,10 @@ Verificado em 14/11/2026:
 
 Os testes de configuração não instalaram pacotes nem alteraram serviços. A implantação do serviço em Linux ainda deve ser validada no servidor de destino. O modo HTTP está no código atualizado da branch `main`, não no pacote antigo da release 0.1.1. Nenhum proxy foi acrescentado à aplicação.
 
+## Versão 0.2.0 — suporte remoto próprio
+
+O servidor usa credencial de suporte separada da credencial de telemetria, cria sessões de uma hora e conserva apenas o quadro mais recente em memória. O módulo `assist-support` captura a tela principal e aplica eventos limitados de mouse e teclado. A interface web inicia, controla e encerra a sessão. Os testes automatizados e a compilação Windows validam protocolo e integração; captura e entrada devem ser homologadas em uma VM Windows com sessão gráfica real.
+
 ## Versão 0.1.2 — instalador unificado Windows
 
 O instalador oferece seleção independente de Manager, Agente e Servidor. A compilação do Inno Setup, a análise de sintaxe dos scripts PowerShell e os testes Rust foram executados no Windows. A instalação real de Agente/Servidor deve ser validada em uma VM Windows dedicada porque cria serviço, tarefa agendada e regra de firewall.
@@ -26,7 +30,7 @@ Verificações locais em Windows x64, em 13/11/2026:
 - O teste não abriu o painel, não se conectou a um servidor externo e não instalou agente ou serviço.
 - A instalação temporária e sua entrada de desinstalação foram removidas ao concluir. Logs ficam apenas em `test-output/`, fora dos pacotes e do Git.
 
-O Manager permanece um aplicativo Rust que abre o painel no Microsoft Edge, agora com instalador gráfico e sem console ao iniciar. Os limites de validação de serviço Windows, rollback, servidor Linux e RustDesk descritos abaixo continuam aplicáveis até a homologação desses componentes.
+O Manager permanece um aplicativo Rust que abre o painel no Microsoft Edge, agora com instalador gráfico e sem console ao iniciar. Os limites de validação de serviço Windows, rollback e servidor Linux descritos abaixo continuam aplicáveis até a homologação desses componentes.
 
 ## Versão 0.1.0
 
@@ -59,7 +63,7 @@ O resultado estruturado e as capturas ficam em `test-output/smoke-ba83aa9a7ed345
 - Compilação/execução do aplicativo Linux. Existe workflow de CI para Linux e Windows, ainda não executado no GitHub.
 - Registro do agente como serviço SYSTEM, ACLs e tarefa agendada no Windows.
 - Substituição de executável em serviço, queda de energia e rollback real. O código e os scripts estão implementados; a verificação criptográfica e a preparação da release foram testadas, mas o ciclo de instalação requer uma VM piloto.
-- Sessão de tela, controle e transferência de arquivos via RustDesk. A central gera o link de conexão; essas funções dependem do RustDesk instalado/configurado separadamente.
+- Transferência de arquivos durante a sessão de suporte ainda não está disponível.
 - Escala, disponibilidade, múltiplos administradores e requisitos de produção de uma suíte RMM.
 
 Nenhum serviço foi instalado neste computador, nenhuma ação de reboot foi executada e nenhum servidor externo recebeu a telemetria de teste.

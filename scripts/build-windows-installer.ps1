@@ -18,7 +18,7 @@ if (!$Iscc -or !(Test-Path -LiteralPath $Iscc)) { throw 'Instale Inno Setup 6/7 
 Push-Location $root
 try {
     if (!$SkipBuild) {
-        & cargo build --release --locked -p assist-manager -p assist-agent -p assist-server
+        & cargo build --release --locked -p assist-manager -p assist-agent -p assist-server -p assist-support
         if ($LASTEXITCODE -ne 0) { throw 'Compilação dos componentes falhou.' }
     }
     & $Iscc "/DAppVersion=$version" "/DProjectRoot=$root" "$root\scripts\windows\manager-installer.iss"

@@ -323,6 +323,21 @@ fn enroll() -> Result<()> {
         .json()?;
     config.node_id = credentials.node_id;
     config.token = credentials.token;
+    if let Some(path) = std::env::var_os("ASSIST_SUPPORT_CONFIG") {
+        let path = std::path::PathBuf::from(path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        atomic_json(
+            &path,
+            &serde_json::json!({
+                "server": config.server,
+                "node_id": config.node_id,
+                "token": credentials.support_token,
+                "unattended": true
+            }),
+        )?;
+    }
     atomic_json(&dir.join("config.json"), &config)?;
     println!("Computador cadastrado com sucesso.");
     Ok(())
