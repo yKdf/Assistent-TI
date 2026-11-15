@@ -19,9 +19,9 @@ trap {
 $installDir = Join-Path $env:ProgramData 'AssistenteTI'
 $supportDir = Join-Path $env:ProgramData 'AssistenteTISupport'
 $configPath = Join-Path $installDir 'config.json'
-$service = Get-Service AssistenteTINode -ErrorAction Stop
+$service = Get-Service AssistenteTINode -ErrorAction SilentlyContinue
 if (!(Test-Path $configPath) -or !(Test-Path $Binary) -or !(Test-Path $SupportBinary)) { throw 'Arquivos necessários para atualizar o Agente não foram encontrados.' }
-if ($service.Status -ne 'Stopped') { Stop-Service AssistenteTINode; $service.WaitForStatus('Stopped',[TimeSpan]::FromSeconds(60)) }
+if ($service -and $service.Status -ne 'Stopped') { Stop-Service AssistenteTINode; $service.WaitForStatus('Stopped',[TimeSpan]::FromSeconds(60)) }
 $currentBinary = Join-Path $installDir 'assist-agent.exe'
 Copy-Item -LiteralPath $currentBinary -Destination (Join-Path $installDir 'assist-agent.installer-backup.exe') -Force
 Copy-Item -LiteralPath $Binary -Destination $currentBinary -Force
@@ -43,6 +43,16 @@ Copy-Item -LiteralPath $SupportBinary -Destination (Join-Path $supportDir 'assis
 & icacls.exe $supportDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-11:(OI)(CI)RX' /t | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Não foi possível proteger o módulo de suporte.' }
 New-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name AssistenteTISupport -PropertyType String -Value ('"' + (Join-Path $supportDir 'assist-support.exe') + '"') -Force | Out-Null
+if (!$service) {
+    New-Service -Name AssistenteTINode -BinaryPathName ('"' + $currentBinary + '" service') -DisplayName 'Assistente TI — Node' -Description 'Inventário e suporte autorizado da organização.' -StartupType Automatic | Out-Null
+}
+& sc.exe failure AssistenteTINode reset= 86400 actions= restart/10000/restart/30000/restart/60000 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Não foi possível configurar recuperação de falhas.' }
+& sc.exe failureflag AssistenteTINode 1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Não foi possível habilitar recuperação de erros do serviço.' }
+& sc.exe sdset AssistenteTINode 'D:(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Não foi possível definir as permissões do serviço.' }
 Start-Service AssistenteTINode
-Start-Process -FilePath (Join-Path $supportDir 'assist-support.exe') -WindowStyle Hidden
+try { Start-Process -FilePath (Join-Path $supportDir 'assist-support.exe') -WindowStyle Hidden }
+catch { Write-Warning 'O módulo de suporte iniciará automaticamente no próximo login do Windows.' }
 Write-Host 'Agente e módulo de suporte atualizados; cadastro e configurações foram preservados.'

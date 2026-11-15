@@ -61,4 +61,4 @@ curl http://127.0.0.1/health
 
 Se escolheu um IP específico, use esse endereço no `curl`. Repita o instalador com `--http` após atualizar o código; dados e senha existentes são preservados. O arquivo de configuração é regravado com as opções informadas.
 
-O Manager, os agentes e o módulo de suporte continuam exigindo HTTPS para endereços remotos; utilize neles a URL do seu proxy externo. O navegador pode acessar diretamente o painel HTTP. A versão 0.2.2 e a branch `main` incluem o modo HTTP do servidor.
+O Manager, os agentes e o módulo de suporte continuam exigindo HTTPS para endereços remotos; utilize neles a URL do seu proxy externo. O navegador pode acessar diretamente o painel HTTP. A versão 0.2.3 e a branch `main` incluem o modo HTTP do servidor.

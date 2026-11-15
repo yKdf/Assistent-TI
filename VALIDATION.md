@@ -11,6 +11,10 @@ Verificado em 14/11/2026:
 
 Os testes de configuração não instalaram pacotes nem alteraram serviços. A implantação do serviço em Linux ainda deve ser validada no servidor de destino. O modo HTTP está no código atualizado da branch `main`, não no pacote antigo da release 0.1.1. Nenhum proxy foi acrescentado à aplicação.
 
+## Versão 0.2.3 — reparo do Agente parcial
+
+Uma instalação que já possui `config.json` e o binário do Agente entra em modo de reparo mesmo quando o serviço ainda não foi criado. A falha ao iniciar imediatamente o módulo gráfico não cancela a instalação; ele permanece registrado para o próximo login.
+
 ## Versão 0.2.2 — atualização pelo instalador
 
 Ao executar uma versão mais recente, o instalador substitui o Manager, atualiza o Servidor preservando dados e atualiza o Agente preservando `config.json`, cadastro e serviço. Nodes antigos recebem uma credencial limitada de suporte pelo endpoint autenticado do próprio Agente, sem novo convite.

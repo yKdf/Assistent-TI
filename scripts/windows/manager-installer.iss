@@ -129,7 +129,7 @@ end;
 
 function AgentInstalled: Boolean;
 begin
-  Result := RegKeyExists(HKLM64, 'SYSTEM\CurrentControlSet\Services\AssistenteTINode') and FileExists(ExpandConstant('{commonappdata}\AssistenteTI\config.json'));
+  Result := FileExists(ExpandConstant('{commonappdata}\AssistenteTI\config.json')) and FileExists(ExpandConstant('{commonappdata}\AssistenteTI\assist-agent.exe'));
 end;
 
 procedure InitializeWizard;

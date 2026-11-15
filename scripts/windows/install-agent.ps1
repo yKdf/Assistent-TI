@@ -76,7 +76,6 @@ if ($SupportBinary) {
     & icacls.exe $supportDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-11:(OI)(CI)RX' /t | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Não foi possível proteger o módulo de suporte.' }
     New-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run' -Name AssistenteTISupport -PropertyType String -Value ('"' + (Join-Path $supportDir 'assist-support.exe') + '"') -Force | Out-Null
-    Start-Process -FilePath (Join-Path $supportDir 'assist-support.exe') -WindowStyle Hidden
 }
 New-Service -Name AssistenteTINode -BinaryPathName ('"' + (Join-Path $installDir 'assist-agent.exe') + '" service') -DisplayName 'Assistente TI — Node' -Description 'Inventário e suporte autorizado da organização.' -StartupType Automatic | Out-Null
 & sc.exe failure AssistenteTINode reset= 86400 actions= restart/10000/restart/30000/restart/60000 | Out-Null
@@ -93,5 +92,9 @@ if ($UpdatePublicKey) {
     Register-ScheduledTask -TaskName AssistenteTIUpdate -Action $action -Trigger $trigger -Settings $settings -User SYSTEM -RunLevel Highest -Force | Out-Null
 }
 Start-Service AssistenteTINode
+if ($SupportBinary) {
+    try { Start-Process -FilePath (Join-Path $supportDir 'assist-support.exe') -WindowStyle Hidden }
+    catch { Write-Warning 'O módulo de suporte iniciará automaticamente no próximo login do Windows.' }
+}
 Write-Host "Agente instalado em $installDir. Confira o computador no painel."
 Write-Host 'Administradores podem parar e remover o serviço. Atualizações dependem de releases assinadas publicadas no servidor.'
