@@ -415,6 +415,26 @@ async fn heartbeat(
         release: current_release(&app),
     }))
 }
+async fn provision_support(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+) -> Api<Json<SupportCredentials>> {
+    let mut store = app.storage.lock().unwrap();
+    let id = node_id(&store, &headers)?;
+    let token = random();
+    let node = store
+        .records
+        .nodes
+        .iter_mut()
+        .find(|n| n.id == id)
+        .ok_or_else(denied)?;
+    node.support_token_hash = hash(&token);
+    store.audit("support_credential_issued", &id);
+    store.save().map_err(internal)?;
+    Ok(Json(SupportCredentials {
+        support_token: token,
+    }))
+}
 #[derive(Deserialize)]
 struct CommandInput {
     action: Action,
@@ -801,6 +821,7 @@ fn router(app: Shared) -> Router {
         .route("/api/invites", post(invite))
         .route("/api/enroll", post(enroll))
         .route("/api/heartbeat", post(heartbeat))
+        .route("/api/support/provision", post(provision_support))
         .route("/api/nodes/{id}/commands", post(command))
         .route("/api/nodes/{id}/revoke", post(revoke))
         .route("/api/nodes/{id}/support", post(support))

@@ -56,6 +56,7 @@ Source: "{#ProjectRoot}\target\release\assist-agent.exe"; Flags: dontcopy
 Source: "{#ProjectRoot}\target\release\assist-support.exe"; Flags: dontcopy
 Source: "{#ProjectRoot}\target\release\assist-server.exe"; Flags: dontcopy
 Source: "{#ProjectRoot}\scripts\windows\install-agent.ps1"; Flags: dontcopy
+Source: "{#ProjectRoot}\scripts\windows\upgrade-agent.ps1"; Flags: dontcopy
 Source: "{#ProjectRoot}\scripts\windows\update-agent.ps1"; Flags: dontcopy
 Source: "{#ProjectRoot}\scripts\windows\uninstall-agent.ps1"; DestDir: "{app}\support"; Flags: ignoreversion; Components: agent
 Source: "{#ProjectRoot}\scripts\windows\uninstall-agent.ps1"; Flags: dontcopy
@@ -101,6 +102,7 @@ begin
   ExtractTemporaryFile('assist-support.exe');
   ExtractTemporaryFile('assist-server.exe');
   ExtractTemporaryFile('install-agent.ps1');
+  ExtractTemporaryFile('upgrade-agent.ps1');
   ExtractTemporaryFile('update-agent.ps1');
   ExtractTemporaryFile('uninstall-agent.ps1');
   ExtractTemporaryFile('install-server.ps1');
@@ -123,6 +125,11 @@ end;
 function EdgeInstalled: Boolean;
 begin
   Result := FileExists(ExpandConstant('{pf32}\Microsoft\Edge\Application\msedge.exe')) or FileExists(ExpandConstant('{pf64}\Microsoft\Edge\Application\msedge.exe')) or FileExists(ExpandConstant('{localappdata}\Microsoft\Edge\Application\msedge.exe'));
+end;
+
+function AgentInstalled: Boolean;
+begin
+  Result := RegKeyExists(HKLM64, 'SYSTEM\CurrentControlSet\Services\AssistenteTINode') and FileExists(ExpandConstant('{commonappdata}\AssistenteTI\config.json'));
 end;
 
 procedure InitializeWizard;
@@ -152,24 +159,24 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := ((PageID = ConnectionPage.ID) and not (Selected('manager') or Selected('agent'))) or ((PageID = AgentPage.ID) and not Selected('agent')) or ((PageID = ServerPage.ID) and not Selected('server'));
+  Result := ((PageID = ConnectionPage.ID) and not (Selected('manager') or (Selected('agent') and not AgentInstalled))) or ((PageID = AgentPage.ID) and (not Selected('agent') or AgentInstalled)) or ((PageID = ServerPage.ID) and not Selected('server'));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
   if (CurPageID = ConnectionPage.ID) and not CheckConnectionUrl then begin MsgBox('Informe uma URL HTTPS válida. HTTP é aceito somente em localhost.', mbError, MB_OK); Result := False; end
-  else if (CurPageID = AgentPage.ID) and ((Length(Trim(AgentPage.Values[0])) <> 64) or not SafeValue(AgentPage.Values[0]) or not SafeValue(AgentPage.Values[1])) then begin MsgBox('Informe um convite válido e confira os demais campos.', mbError, MB_OK); Result := False; end
+  else if (CurPageID = AgentPage.ID) and not AgentInstalled and ((Length(Trim(AgentPage.Values[0])) <> 64) or not SafeValue(AgentPage.Values[0]) or not SafeValue(AgentPage.Values[1])) then begin MsgBox('Informe um convite válido e confira os demais campos.', mbError, MB_OK); Result := False; end
   else if (CurPageID = ServerPage.ID) and ((Length(ServerPage.Values[2]) < 12) or not SafeValue(ServerPage.Values[0]) or not SafeValue(ServerPage.Values[1])) then begin MsgBox('Confira o endereço e informe uma senha de pelo menos 12 caracteres.', mbError, MB_OK); Result := False; end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if (Selected('manager') or Selected('agent')) and not CheckConnectionUrl then Result := 'URL do servidor inválida.'
+  if (Selected('manager') or (Selected('agent') and not AgentInstalled)) and not CheckConnectionUrl then Result := 'URL do servidor inválida.'
   else if Selected('manager') and not EdgeInstalled then Result := 'Instale o Microsoft Edge antes de instalar o Manager.'
-  else if Selected('agent') and (Length(Trim(AgentPage.Values[0])) <> 64) then Result := 'O Agente precisa de um convite válido.'
-  else if Selected('agent') and (RegKeyExists(HKLM64, 'SYSTEM\CurrentControlSet\Services\AssistenteTINode') or DirExists(ExpandConstant('{commonappdata}\AssistenteTI'))) then Result := 'Já existe um Agente instalado. Revogue o node antigo no painel e execute o desinstalador anterior com -RemoveData antes de cadastrar novamente.'
+  else if Selected('agent') and not AgentInstalled and (Length(Trim(AgentPage.Values[0])) <> 64) then Result := 'O Agente precisa de um convite válido.'
+  else if Selected('agent') and not AgentInstalled and DirExists(ExpandConstant('{commonappdata}\AssistenteTI')) then Result := 'Existe uma pasta incompleta do Agente sem serviço válido. Revise ou remova C:\ProgramData\AssistenteTI antes de instalar.'
   else if Selected('server') and (Length(ServerPage.Values[2]) < 12) then Result := 'O Servidor precisa de senha administrativa com ao menos 12 caracteres.';
 end;
 
@@ -197,14 +204,6 @@ begin
   if CurStep <> ssPostInstall then Exit;
   ExtractSupportFiles;
   if Selected('manager') then if not Exec(ExpandConstant('{app}\assist-manager.exe'), '--configure "' + Trim(ConnectionPage.Values[0]) + '"', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then RaiseException('Não foi possível configurar o Manager.');
-  if Selected('agent') then begin
-    SecretFile := ExpandConstant('{tmp}\agent-invite.txt');
-    SaveStringToFile(SecretFile, Trim(AgentPage.Values[0]), False);
-    Parameters := '-InstallerMode -Server "' + Trim(ConnectionPage.Values[0]) + '" -InviteFile "' + SecretFile + '" -Binary "' + ExpandConstant('{tmp}\assist-agent.exe') + '" -SupportBinary "' + ExpandConstant('{tmp}\assist-support.exe') + '"';
-    if Trim(AgentPage.Values[1]) <> '' then Parameters := Parameters + ' -UpdatePublicKey "' + Trim(AgentPage.Values[1]) + '"';
-    RunPowerShell('install-agent.ps1', Parameters);
-    DeleteFile(SecretFile);
-  end;
   if Selected('server') then begin
     SecretFile := ExpandConstant('{tmp}\server-password.txt');
     SaveStringToFile(SecretFile, ServerPage.Values[2], False);
@@ -212,6 +211,20 @@ begin
     if Trim(ServerPage.Values[1]) <> '' then Parameters := Parameters + ' -PublicUrl "' + Trim(ServerPage.Values[1]) + '"';
     RunPowerShell('install-server.ps1', Parameters);
     DeleteFile(SecretFile);
+  end;
+  if Selected('agent') then begin
+    if AgentInstalled then begin
+      Parameters := '-Binary "' + ExpandConstant('{tmp}\assist-agent.exe') + '" -SupportBinary "' + ExpandConstant('{tmp}\assist-support.exe') + '"';
+      if Trim(AgentPage.Values[1]) <> '' then Parameters := Parameters + ' -UpdatePublicKey "' + Trim(AgentPage.Values[1]) + '"';
+      RunPowerShell('upgrade-agent.ps1', Parameters);
+    end else begin
+      SecretFile := ExpandConstant('{tmp}\agent-invite.txt');
+      SaveStringToFile(SecretFile, Trim(AgentPage.Values[0]), False);
+      Parameters := '-InstallerMode -Server "' + Trim(ConnectionPage.Values[0]) + '" -InviteFile "' + SecretFile + '" -Binary "' + ExpandConstant('{tmp}\assist-agent.exe') + '" -SupportBinary "' + ExpandConstant('{tmp}\assist-support.exe') + '"';
+      if Trim(AgentPage.Values[1]) <> '' then Parameters := Parameters + ' -UpdatePublicKey "' + Trim(AgentPage.Values[1]) + '"';
+      RunPowerShell('install-agent.ps1', Parameters);
+      DeleteFile(SecretFile);
+    end;
   end;
 end;
 

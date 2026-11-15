@@ -76,6 +76,10 @@ pub struct Credentials {
     pub token: String,
     pub support_token: String,
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SupportCredentials {
+    pub support_token: String,
+}
 
 // Signature covers every field affecting installation, in an unambiguous format.
 #[derive(Clone, Debug, Serialize, Deserialize)]

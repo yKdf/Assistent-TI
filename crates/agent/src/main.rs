@@ -342,6 +342,37 @@ fn enroll() -> Result<()> {
     println!("Computador cadastrado com sucesso.");
     Ok(())
 }
+fn provision_support() -> Result<()> {
+    let dir = root();
+    let config = read_config(&dir)?;
+    anyhow::ensure!(
+        !config.node_id.is_empty() && !config.token.is_empty(),
+        "Agente ainda não cadastrado"
+    );
+    let credentials: SupportCredentials = client()?
+        .post(format!("{}/api/support/provision", config.server))
+        .bearer_auth(&config.token)
+        .send()?
+        .error_for_status()?
+        .json()?;
+    let path = std::env::var_os("ASSIST_SUPPORT_CONFIG")
+        .context("ASSIST_SUPPORT_CONFIG não configurado")?;
+    let path = std::path::PathBuf::from(path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    atomic_json(
+        &path,
+        &serde_json::json!({
+            "server": config.server,
+            "node_id": config.node_id,
+            "token": credentials.support_token,
+            "unattended": true
+        }),
+    )?;
+    println!("Credencial de suporte atualizada.");
+    Ok(())
+}
 fn verify_update() -> Result<()> {
     let dir = root();
     let config = read_config(&dir)?;
@@ -424,6 +455,7 @@ mod service {
 fn main() -> Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("enroll") => enroll(),
+        Some("provision-support") => provision_support(),
         Some("verify-update") => verify_update(),
         Some("run") => run(Arc::new(AtomicBool::new(false))),
         Some("version") => {
@@ -432,7 +464,7 @@ fn main() -> Result<()> {
         }
         #[cfg(windows)]
         Some("service") => service::start(),
-        _ => anyhow::bail!("Uso: assist-agent enroll | run | service | verify-update | version"),
+        _ => anyhow::bail!("Uso: assist-agent enroll | provision-support | run | service | verify-update | version"),
     }
 }
 
