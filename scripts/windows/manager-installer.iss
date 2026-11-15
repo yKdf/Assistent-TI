@@ -169,14 +169,24 @@ begin
   if (Selected('manager') or Selected('agent')) and not CheckConnectionUrl then Result := 'URL do servidor inválida.'
   else if Selected('manager') and not EdgeInstalled then Result := 'Instale o Microsoft Edge antes de instalar o Manager.'
   else if Selected('agent') and (Length(Trim(AgentPage.Values[0])) <> 64) then Result := 'O Agente precisa de um convite válido.'
+  else if Selected('agent') and (RegKeyExists(HKLM64, 'SYSTEM\CurrentControlSet\Services\AssistenteTINode') or DirExists(ExpandConstant('{commonappdata}\AssistenteTI'))) then Result := 'Já existe um Agente instalado. Revogue o node antigo no painel e execute o desinstalador anterior com -RemoveData antes de cadastrar novamente.'
   else if Selected('server') and (Length(ServerPage.Values[2]) < 12) then Result := 'O Servidor precisa de senha administrativa com ao menos 12 caracteres.';
 end;
 
 procedure RunPowerShell(const Script, Parameters: String);
 var
   ExitCode: Integer;
+  ErrorFile: String;
+  ErrorText: AnsiString;
 begin
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "' + ExpandConstant('{tmp}\' + Script) + '" ' + Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then RaiseException('Falha ao instalar o componente. Consulte o log do instalador.');
+  ErrorFile := ExpandConstant('{tmp}\component-error.txt');
+  DeleteFile(ErrorFile);
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "' + ExpandConstant('{tmp}\' + Script) + '" ' + Parameters + ' -ErrorFile "' + ErrorFile + '"', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then begin
+    if LoadStringFromFile(ErrorFile, ErrorText) and (Trim(String(ErrorText)) <> '') then
+      RaiseException('Falha ao instalar o componente:' + #13#10 + Trim(String(ErrorText)))
+    else
+      RaiseException('Falha ao instalar o componente. Código: ' + IntToStr(ExitCode));
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

@@ -7,9 +7,14 @@ param(
     [switch]$InstallerMode,
     [switch]$AllowReboot,
     [string]$SupportBinary,
+    [string]$ErrorFile,
     [string]$Binary = "$PSScriptRoot\..\..\dist\windows\assist-agent.exe"
 )
 $ErrorActionPreference = 'Stop'
+trap {
+    if ($ErrorFile) { [IO.File]::WriteAllText($ErrorFile, ($_ | Out-String), (New-Object Text.UTF8Encoding($false))) }
+    exit 1
+}
 $installDir = Join-Path $env:ProgramData 'AssistenteTI'
 $supportDir = Join-Path $env:ProgramData 'AssistenteTISupport'
 if (Get-Service AssistenteTINode -ErrorAction SilentlyContinue) { throw 'O agente já está instalado. Use atualização assinada ou desinstale antes de recadastrar.' }

@@ -11,6 +11,10 @@ Verificado em 14/11/2026:
 
 Os testes de configuração não instalaram pacotes nem alteraram serviços. A implantação do serviço em Linux ainda deve ser validada no servidor de destino. O modo HTTP está no código atualizado da branch `main`, não no pacote antigo da release 0.1.1. Nenhum proxy foi acrescentado à aplicação.
 
+## Versão 0.2.1 — diagnóstico do instalador
+
+O instalador detecta uma instalação anterior do Agente antes de copiar componentes e exibe a orientação de recadastro. Falhas dos scripts PowerShell agora retornam o erro original na interface do instalador.
+
 ## Versão 0.2.0 — suporte remoto próprio
 
 O servidor usa credencial de suporte separada da credencial de telemetria, cria sessões de uma hora e conserva apenas o quadro mais recente em memória. O módulo `assist-support` captura a tela principal e aplica eventos limitados de mouse e teclado. A interface web inicia, controla e encerra a sessão. Os testes automatizados e a compilação Windows validam protocolo e integração; captura e entrada devem ser homologadas em uma VM Windows com sessão gráfica real.

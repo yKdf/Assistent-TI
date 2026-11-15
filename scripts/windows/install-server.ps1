@@ -3,9 +3,14 @@ param(
     [string]$Bind = '0.0.0.0:80',
     [string]$PublicUrl,
     [Parameter(Mandatory=$true)][string]$PasswordFile,
+    [string]$ErrorFile,
     [string]$Binary = "$PSScriptRoot\..\..\target\release\assist-server.exe"
 )
 $ErrorActionPreference = 'Stop'
+trap {
+    if ($ErrorFile) { [IO.File]::WriteAllText($ErrorFile, ($_ | Out-String), (New-Object Text.UTF8Encoding($false))) }
+    exit 1
+}
 $installDir = Join-Path $env:ProgramData 'AssistenteTIServer'
 if (!(Test-Path -LiteralPath $Binary)) { throw "Binário não encontrado: $Binary" }
 $listenUri = [uri]('tcp://' + $Bind)

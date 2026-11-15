@@ -6,9 +6,9 @@ Esta é uma primeira versão para validar em um grupo piloto. O suporte próprio
 
 Baixe os arquivos prontos em [Releases no GitHub](https://github.com/yKdf/Assistent-TI/releases/latest):
 
-- **`AssistenteTI-Setup-0.2.0-windows-x64.exe`**: instalador gráfico unificado com Manager, Agente, Servidor e suporte remoto próprio.
-- `AssistenteTI-windows-0.2.0.zip`: binários e scripts de instalação Windows.
-- `AssistenteTI-source-0.2.0.zip`: projeto completo, painel e instaladores.
+- **`AssistenteTI-Setup-0.2.1-windows-x64.exe`**: instalador gráfico unificado com Manager, Agente, Servidor e suporte remoto próprio.
+- `AssistenteTI-windows-0.2.1.zip`: binários e scripts de instalação Windows.
+- `AssistenteTI-source-0.2.1.zip`: projeto completo, painel e instaladores.
 - `SHA256SUMS.txt`: hashes dos downloads.
 
 O código está em [yKdf/Assistent-TI](https://github.com/yKdf/Assistent-TI). Resultados dos testes e limites de verificação: [VALIDATION.md](VALIDATION.md).
@@ -56,7 +56,7 @@ O servidor escuta em **`0.0.0.0:80`**. Acesse **`http://IP-DO-SERVIDOR/`** no na
 
 As opções ficam em `/etc/assist-ti/server.env`. Também é possível escolher a interface com `--http --bind 10.0.0.20:80`. A URL pública HTTPS é opcional, não uma condição para iniciar o servidor HTTP.
 
-Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). A versão 0.2.0 e a branch `main` incluem esse modo.
+Veja [instruções do servidor HTTP e migração da instalação antiga](docs/http-server.md). A versão 0.2.1 e a branch `main` incluem esse modo.
 
 ### Instalação com HTTPS automático pelo Caddy
 
@@ -143,7 +143,7 @@ O launcher é compilado em Rust e abre uma janela dedicada do Edge/Chromium para
 
 Windows, com Microsoft Edge instalado:
 
-1. Baixe e abra **`AssistenteTI-Setup-0.2.0-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
+1. Baixe e abra **`AssistenteTI-Setup-0.2.1-windows-x64.exe`** em [Releases](https://github.com/yKdf/Assistent-TI/releases/latest).
 2. Informe a URL HTTPS do seu servidor, por exemplo `https://ti.suaempresa.com.br`.
 3. Conclua a instalação e abra **Assistente TI** pelo menu Iniciar. O atalho na área de trabalho é opcional.
 
@@ -171,7 +171,7 @@ O primeiro comando baixa uma versão fixa do [Inno Setup](https://jrsoftware.org
 Instalação silenciosa opcional:
 
 ```powershell
-.\AssistenteTI-Setup-0.2.0-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TYPE=custom /COMPONENTS=manager /SERVERURL="https://ti.suaempresa.com.br"
+.\AssistenteTI-Setup-0.2.1-windows-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TYPE=custom /COMPONENTS=manager /SERVERURL="https://ti.suaempresa.com.br"
 ```
 
 Esse instalador é **somente do Manager**. O agente dos computadores gerenciados e o servidor Linux continuam usando seus respectivos scripts. Publicar os binários no GitHub não ativa atualizações dos agentes: essas releases precisam ser assinadas com a chave da organização e publicadas no servidor conforme a seção 5.
@@ -209,7 +209,7 @@ Guarde a chave privada em local restrito e com backup. No Linux o arquivo é cri
 2. Assine usando a **mesma versão embutida no executável** e uma sequência maior que todas as anteriores:
 
 ```bash
-assist-release sign assinatura.key assist-agent.exe 0.2.0 1 release-assinada
+assist-release sign assinatura.key assist-agent.exe 0.2.1 1 release-assinada
 ```
 
 3. Transfira a pasta `release-assinada` ao servidor e execute:
